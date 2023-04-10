@@ -1,0 +1,303 @@
+'''Executable implementation of a baseline language model M1 (with/without Backo) 
+with perplexity calculation.1'''
+'''Here are the general steps to implement a bigram model M1 on a PTB dataset:
+Load the dataset
+Preprocess the data (tokenize, clean, etc.)
+Create a vocabulary of all unique words in the dataset
+Generate bigrams (pair of adjacent words) from the dataset
+Compute the frequency of each bigram
+Compute the probability of each bigram
+Implement the bigram model M1 using the probabilities computed in the previous step
+Evaluate the model using perplexity metrics.'''
+
+#1. Loading data
+# Read the contents of the file
+def read_file_contents(data_path):
+    with open(data_path, 'r') as file:
+        contents = file.read()
+    return contents
+
+data_path_PTB = "/NLP/ptbdataset/ptb.train.txt"
+contents_PTB = read_file_contents(data_path_PTB)
+data_path_WIKI = "https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-v1.zip?ref=blog.salesforceairesearch.com"
+contents_WIKI = read_file_contents(data_path_WIKI)
+
+
+
+#2. Preprocess data.
+Preprocess data
+'''PTB dataset is ready to use. #For PTB dataset: delete all non-alphabetic characters
+words = [word for word in tokens if word.isalpha()] Wiki need to be lowercased, cleaned'''
+import re
+def preprocess_text(text):
+    # lowercase text
+    text = text.lower()
+
+    # remove numbers and 
+    text = re.sub(r'[<.*?@:;=>]', '', text)
+    return text
+
+def tokenize(text):
+    # tokenize text
+    tokens = text.split()
+    #remove all nonalpha-words
+    words = [word for word in tokens if word.isalpha()]
+    return words
+
+#Tokenize the text(split into words)
+tokens_PTB = tokenize(preprocess_text(contents_PTB))
+tokens_WIKI = tokenize(preprocess_text(contents_WIKI))
+
+tokens_both = tokens_WIKI.copy()
+print(f"The length of PTB and WIKI tokens accordingly: {len(tokens_PTB), len(tokens_WIKI), len(tokens_both)}")
+for i in tokens_PTB:
+    tokens_both.append(i)
+
+
+
+#3. Create a vocabulary of all unique words in the dataset
+#Build the set of all unique words
+set_PTB = set(tokens_PTB)
+set_WIKI = set(tokens_WIKI)
+vocab_PTB = sorted(list(set_PTB))
+vocab_WIKI = sorted(set_WIKI)
+set_both = set_PTB.union(set_WIKI)
+vocab_both = sorted(list(set_both))
+
+#Frequencies of unique words
+def get_vocab_freq(words):
+    vocab_freq = {}
+    for word in words:
+        if word in vocab_freq:
+            vocab_freq[word] += 1
+        else:
+            vocab_freq[word] = 1
+    return vocab_freq
+
+#Frequencies of unique words
+vocab_freq_PTB = get_vocab_freq(vocab_PTB)
+vocab_freq_WIKI = get_vocab_freq(vocab_WIKI)
+vocab_freq_both = get_vocab_freq(vocab_both)
+
+
+
+#4. Generate bigrams (pair of adjacent words) from the dataset
+# Generate bigrams
+bigrams_PTB = [(tokens_PTB[i], tokens_PTB[i+1]) for i in range(len(tokens_PTB)-1)]
+bigrams_WIKI = [(tokens_WIKI[i], tokens_WIKI[i+1]) for i in range(len(tokens_WIKI)-1)]
+bigrams_both = [(tokens_both[i], tokens_both[i+1]) for i in range(len(tokens_both)-1)]
+
+
+
+#5. Compute the frequency of each bigram
+#compute the frequency of each  bigram
+def count_bigrams(bigrams):
+    bigram_freq = {}
+    for bigram in bigrams:
+        if bigram in bigram_freq:
+            bigram_freq[bigram] += 1
+        else:
+            bigram_freq[bigram] = 1
+    return bigram_freq
+
+bigram_freq_PTB = count_bigrams(bigrams_PTB)
+bigram_freq_WIKI = count_bigrams(bigrams_WIKI)
+bigram_freq_both = count_bigrams(bigrams_both)
+
+
+#6. Compute the probability of each bigram
+#Bigram Model
+'''if alpha set to 0, then no smoothing, if alpha is 1, then Laplace smoothing, else additive smoothing'''
+def bigram_model_additive_freq(sentence, bigram_freq, vocab_freq, alpha=0):
+    words = sentence.split()
+    N = len(words)
+    prob = 1.0
+
+    for i in range(N-1):
+        bigram = (words[i], words[i+1])
+        count_bigram = bigram_freq.get(bigram, 0)
+        first_word = bigram[0]
+        denominator = vocab_freq.get(first_word, 0) + alpha*len(vocab_freq)
+        #check if the bigram (first word of bigram) is not in the train set and alpha=0, 
+        #to avoid division 0 error
+        if alpha == 0:
+            denominator += 1e-10
+        
+        #calculate bigram probability
+        bigram_probs = (count_bigram + alpha) / denominator
+        
+        prob *= bigram_probs
+        
+    return prob
+
+
+
+#7. Preprocessing Test dataset
+#Loading test set
+test_set_path_ptb = "NLP/ptbdataset/ptb.test.txt"
+test_set_path_wiki = "NLP/wikitext-2/wiki.test.tokens"
+# Read test set
+test_set_ptb = read_file_contents(test_set_path_ptb)
+test_set_wiki = read_file_contents(test_set_path_wiki)
+#Preprocess test set
+test_ptb = preprocess_text(test_set_ptb)
+test_wiki = preprocess_text(test_set_wiki)
+
+#break test set into sentences
+test_ptb = test_ptb.split('\n')
+# Use list comprehension to filter out empty strings
+test_ptb = [sentence for sentence in test_ptb if sentence.strip()]
+
+test_wiki = test_wiki.split('\n')
+# Use list comprehension to filter out empty strings
+test_wiki = [sentence for sentence in test_wiki if sentence.strip()]
+
+
+
+#8. Perplexity
+import math
+from math import inf
+
+
+#alpha is a parameter for additive smoothing, if aplha is 1 then it is Laplace adding,
+#if it is 0, no smoothing, perplexity is infinity
+
+def perplexity(sentence, bigram_freq, vocab_freq, alpha=0):
+    words = sentence.split()
+    N = len(words)
+    if N == 0:  # check if sentence is empty
+        return float('inf')
+    
+    # Compute the probability of the sentence using the given bigram model
+    prob = bigram_model_additive_freq(sentence, bigram_freq=bigram_freq, vocab_freq=vocab_freq, alpha=alpha)
+    
+    #check if prob = 0, that is bigram does not exist in train set
+    if prob == 0:
+        return inf
+    # Compute the perplexity as the inverse of the geometric mean of the probabilities
+    # of the words
+    # Compute perplexity as e to the power of the negative average log probability
+    p = math.exp(-1/N * math.log(prob))
+
+    # Return the perplexity
+    return p
+
+import math
+
+#PTB test set
+# Compute the perplexity of each sentence in the PTB test set with 
+alpha = 1
+perplexities_ptb = []
+for sentence in test_ptb:
+    p = perplexity(sentence, bigram_freq_PTB, vocab_freq_PTB, alpha)
+    perplexities_ptb.append(p)
+    print(f"Sentence: {sentence}")
+    print(f"Perplexity PTB test setwith alpha= {alpha}: {p}")
+    print()
+
+# Compute the geometric mean of the perplexity values in the PTB test set 
+log_sum = 0.0
+for perplexi in perplexities_ptb:
+    log_sum += math.log(perplexi)
+    
+geometric_mean = math.exp(log_sum / len(perplexities_ptb))
+print(f"Geometric mean perplexity of PTB test set with alpha={alpha}: {geometric_mean}")
+
+
+#WIKI test set
+# Compute the perplexity of each sentence in the WIKI test set with 
+alpha = 1
+perplexities_wiki = []
+for sentence in test_wiki:
+    p = perplexity(sentence, bigram_freq_WIKI, vocab_freq_WIKI, alpha)
+    perplexities_wiki.append(p)
+    print(f"Sentence: {sentence}")
+    print(f"Perplexity WIKI test set with alpha= {alpha}: {p}")
+    print()
+
+# Compute the geometric mean of the perplexity values in the WIKI test set 
+log_sum = 0.0
+for perplexit in perplexities_wiki:
+    log_sum += math.log(perplexit)
+geometric_mean = math.exp(log_sum / len(perplexities_wiki))
+print(f"Geometric mean perplexity of wiki test set with alpha={alpha}: {geometric_mean}")
+
+# Compute the perplexity of each sentence in the PTB test set with WIKI both
+alpha = 1
+perplexities_ptb_both = []
+for sentence in test_ptb:
+    p = perplexity(sentence, bigram_freq_both, vocab_freq_both, alpha)
+    perplexities_ptb_both.append(p)
+    print(f"Sentence: {sentence}")
+    print(f"Perplexity PTB test setwith alpha= {alpha}: {p}")
+    print()
+
+#perplexity on PTB test set trained on both sets
+log_sum = 0.0
+for perplexit in perplexities_ptb_both:
+    log_sum += math.log(perplexit)
+geometric_mean = math.exp(log_sum / len(perplexities_ptb_both))
+print(f"Geometric mean perplexity of PTB test set with model trained on both sets with alpha={alpha}: {geometric_mean}")
+
+
+
+#9. Bigram Model with backoff
+'''k is a hyperparameter that specifies the strength of the smoothing, and alpha 
+is a hyperparameter that controls the interpolation between the bigram and unigram 
+probabilities. K Laplace smoothing'''
+def bigram_model_backoff(sentence, bigram_freq, vocab_freq, alpha=1, k=1):
+    words = sentence.split()
+    N = len(words)
+    prob = 1.0
+    
+    for i in range(N-1):
+        bigram = (words[i], words[i+1])
+        if bigram in bigram_freq:
+            
+            count_bigram = bigram_freq.get(bigram, 0) + k
+            first_word = bigram[0]
+            count_unigram = vocab_freq.get(first_word,0) + k
+            prob_bigram = count_bigram / count_unigram
+            prob *= alpha * prob_bigram + (1-alpha) * ((vocab_freq.get(words[i+1]) + k) / (sum(vocab_freq.values()) + k * len(vocab_freq)))
+        else:
+            unigram = words[i+1]
+            if unigram not in vocab_freq:
+                prob *= (k / (sum(vocab_freq.values()) + k * len(vocab_freq))) ** 2
+            else:
+                count_unigram = vocab_freq.get(unigram, 0) + k
+                prob *= (alpha * (count_unigram / (sum(vocab_freq.values()) + k * len(vocab_freq)))) + ((1-alpha) * (k / (sum(vocab_freq.values()) + k * len(vocab_freq))))
+    return prob
+
+def perplexity(sentence,bigram_freq, vocab_freq, alpha=0,k=1):
+    words = sentence.split()
+    N = len(words)
+    if N == 0:  # check if sentence is empty
+        return float('inf')
+    # Compute the probability of the sentence using the given bigram model
+    prob = bigram_model_backoff(sentence, bigram_freq=bigram_freq, vocab_freq=vocab_freq, alpha=alpha,k=k)
+    #check if prob = 0, that is bigram does not exist in train set
+    if prob == 0:
+        return inf
+    # Compute perplexity as e to the power of the negative average log probability
+    p = math.exp(-1/N * math.log(prob))
+
+    # Return the perplexity
+    return p
+
+# Compute the perplexity of each sentence in the test set with backoff model
+perplexities_backoff = []
+for sentence in test_wiki:
+    p = perplexity(sentence, bigram_freq_PTB, vocab_freq_PTB, alpha)
+    perplexities_backoff.append(p)
+    print(f"Sentence: {sentence}")
+    print(f"Perplexity of wiki test set with backoff: {p}")
+    print()
+
+
+#perplexity of backoff model
+log_sum = 0.0
+for perplexity in perplexities_backoff:
+    log_sum += math.log(perplexity)
+    
+geometric_mean = math.exp(log_sum / len(perplexities_backoff))
+print(f"Geometric mean perplexity of test set with backoff model and alpha={alpha}: {geometric_mean}")
