@@ -7,5 +7,5 @@ Create a vocabulary of all unique words in the dataset
 Generate bigrams (pair of adjacent words) from the dataset
 Compute the frequency of each bigram
 Compute the probability of each bigram
-Implement the bigram model M1 using the probabilities computed in the previous step
+Implement the bigram model M1 (with and without backoff) using the probabilities computed in the previous step
 Evaluate the model using perplexity metrics.
